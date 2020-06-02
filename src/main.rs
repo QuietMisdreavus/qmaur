@@ -41,11 +41,32 @@ fn make_map<T, K: Eq + Hash, F: FnMut(&T) -> K>(input: Vec<T>, mut key: F) -> Ha
     input.into_iter().map(|it| (key(&it), it)).collect::<HashMap<_, _>>()
 }
 
+fn args() -> clap::App<'static, 'static> {
+    clap::App::new("QuietMisdreavus AUR tool")
+        .version(env!("CARGO_PKG_VERSION"))
+        .author("(c) 2020 QuietMisdreavus")
+        .about("a personal tool to query the AUR")
+        .setting(clap::AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(clap::SubCommand::with_name("checkupdates")
+            .about("checks the AUR for available updates to installed packages"))
+}
+
 fn main() -> io::Result<()> {
+    let args = args().get_matches();
+
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    match args.subcommand() {
+        ("checkupdates", _) => checkupdates()?,
+        _ => (), // if no subcommand was given we wouldn't have gotten here
+    }
+
+    Ok(())
+}
+
+fn checkupdates() -> io::Result<()> {
     let cmd = Command::new("pacman")
         .arg("-Qm")
         .output()?;
