@@ -62,6 +62,12 @@ fn args() -> clap::App<'static, 'static> {
             .help("Emits less information. Can be given once or twice."))
         .subcommand(clap::SubCommand::with_name("checkupdates")
             .about("checks the AUR for available updates to installed packages"))
+        .subcommand(clap::SubCommand::with_name("search")
+            .about("searches the AUR for the given string")
+            .arg(clap::Arg::with_name("QUERY")
+                .help("query to search for")
+                .required(true)
+                .index(1)))
 }
 
 fn main() -> io::Result<()> {
@@ -88,6 +94,7 @@ fn main() -> io::Result<()> {
 
     match args.subcommand() {
         ("checkupdates", _) => checkupdates()?,
+        ("search", Some(sub_args)) => search(sub_args),
         _ => (), // if no subcommand was given we wouldn't have gotten here
     }
 
@@ -153,4 +160,24 @@ fn checkupdates() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn search(args: &clap::ArgMatches) {
+    let query = args.value_of("QUERY").expect("QUERY is required");
+
+    debug!("search query: \"{}\"", query);
+
+    trace!("calling aurweb");
+
+    match raur::search(query) {
+        Ok(list) => {
+            for pkg in list {
+                println!("{} [{}]", pkg.name, pkg.version);
+                println!("    {}", pkg.description.unwrap_or_default());
+            }
+        }
+        Err(err) => {
+            yeet!("aurweb returned an error: {}", err);
+        }
+    }
 }
