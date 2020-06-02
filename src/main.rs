@@ -47,6 +47,19 @@ fn args() -> clap::App<'static, 'static> {
         .author("(c) 2020 QuietMisdreavus")
         .about("a personal tool to query the AUR")
         .setting(clap::AppSettings::SubcommandRequiredElseHelp)
+        .arg(clap::Arg::with_name("verbose")
+            .long("verbose")
+            .short("v")
+            .takes_value(false)
+            .multiple(true)
+            .help("Emits more information. Can be given up to three times."))
+        .arg(clap::Arg::with_name("quiet")
+            .long("quiet")
+            .short("q")
+            .takes_value(false)
+            .multiple(true)
+            .conflicts_with("verbose")
+            .help("Emits less information. Can be given once or twice."))
         .subcommand(clap::SubCommand::with_name("checkupdates")
             .about("checks the AUR for available updates to installed packages"))
 }
@@ -54,8 +67,23 @@ fn args() -> clap::App<'static, 'static> {
 fn main() -> io::Result<()> {
     let args = args().get_matches();
 
+    let env_filter = {
+        use tracing_subscriber::filter::LevelFilter;
+
+        let verbosity = (args.occurrences_of("verbose") as i32) - (args.occurrences_of("quiet") as i32);
+        let f = tracing_subscriber::EnvFilter::from_default_env();
+        match verbosity {
+            -1 => f.add_directive(LevelFilter::ERROR.into()),
+            0 => f.add_directive(LevelFilter::WARN.into()),
+            1 => f.add_directive(LevelFilter::INFO.into()),
+            2 => f.add_directive(LevelFilter::DEBUG.into()),
+            _ if verbosity < -1 => f.add_directive(LevelFilter::OFF.into()),
+            _ if verbosity > 2 => f.add_directive(LevelFilter::TRACE.into()),
+            _ => unreachable!(),
+        }
+    };
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_env_filter(env_filter)
         .init();
 
     match args.subcommand() {
