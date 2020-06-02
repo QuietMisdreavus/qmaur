@@ -26,3 +26,8 @@ cargo install --path .
 mkdir -p ~/.local/share/bash-completion/completions
 qmaur generate-bash-completions > ~/.local/share/bash-completion/completions/qmaur
 ```
+
+if you want something to regularly check for updates in the background, i have a sample script that
+pops a notification with `notify-send` [in this gist][notify-updates].
+
+[notify-updates]: https://gist.github.com/QuietMisdreavus/c97d47cc293259339c3dc93383e46685
