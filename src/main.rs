@@ -20,12 +20,14 @@ use std::hash::Hash;
 use std::io;
 use std::process::Command;
 
+use tracing::{trace, debug, warn, error};
+
 macro_rules! yeet {
     () => {
         std::process::exit(1);
     };
     ($($x:tt)*) => {
-        eprintln!($($x)*);
+        error!($($x)*);
         yeet!();
     };
 }
@@ -40,19 +42,23 @@ fn make_map<T, K: Eq + Hash, F: FnMut(&T) -> K>(input: Vec<T>, mut key: F) -> Ha
 }
 
 fn main() -> io::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
     let cmd = Command::new("pacman")
         .arg("-Qm")
         .output()?;
 
     if !cmd.status.success() {
-        eprintln!("pacman failed!");
+        error!("pacman failed!");
         if let Ok(out) = String::from_utf8(cmd.stdout) {
-            eprintln!("stdout:");
-            eprintln!("{}", out);
+            error!("stdout:");
+            error!("{}", out);
         }
         if let Ok(err) = String::from_utf8(cmd.stderr) {
-            eprintln!("stderr:");
-            eprintln!("{}", err);
+            error!("stderr:");
+            error!("{}", err);
         }
         yeet!();
     }
@@ -70,26 +76,30 @@ fn main() -> io::Result<()> {
         match (split.next(), split.next()) {
             (Some(name), Some(version)) => pkglist.push(LocalPackage { name, version, }),
             _ => {
-                eprintln!("--error: not enough names in a line? \"{}\"", l);
+                warn!("not enough names in a line? \"{}\"", l);
             }
         }
     }
+    debug!("{} foreign packages found by pacman", pkglist.len());
     let pkglist = make_map(pkglist, |p| p.name);
 
     let names = pkglist.keys().collect::<Vec<_>>();
+    trace!("calling aurweb");
     let info = match raur::info(&names) {
         Ok(list) => list,
         Err(err) => { yeet!("aurweb returned an error: \"{}\"", err); }
     };
+    debug!("{} packages returned by aurweb", info.len());
     let mut info = make_map(info, |p| p.name.clone());
 
     for (name, pkg) in pkglist {
         if let Some(aurpkg) = info.remove(name) {
+            debug!("{} / local {} / remote {}", name, pkg.version, aurpkg.version);
             if pkg.version != aurpkg.version {
                 println!("{} {} -> {}", name, pkg.version, aurpkg.version);
             }
         } else {
-            println!("--package {} was not found in AUR", name);
+            warn!("--package {} was not found in AUR", name);
         }
     }
 
