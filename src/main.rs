@@ -22,6 +22,8 @@ use std::process::Command;
 
 use tracing::{trace, debug, warn, error};
 
+use chrono::TimeZone;
+
 macro_rules! yeet {
     () => {
         std::process::exit(1);
@@ -68,6 +70,12 @@ fn args() -> clap::App<'static, 'static> {
                 .help("query to search for")
                 .required(true)
                 .index(1)))
+        .subcommand(clap::SubCommand::with_name("info")
+            .about("displays info about the given package")
+            .arg(clap::Arg::with_name("NAME")
+                .help("name of AUR package to display")
+                .required(true)
+                .index(1)))
 }
 
 fn main() -> io::Result<()> {
@@ -95,6 +103,7 @@ fn main() -> io::Result<()> {
     match args.subcommand() {
         ("checkupdates", _) => checkupdates()?,
         ("search", Some(sub_args)) => search(sub_args),
+        ("info", Some(sub_args)) => info(sub_args),
         _ => (), // if no subcommand was given we wouldn't have gotten here
     }
 
@@ -174,6 +183,61 @@ fn search(args: &clap::ArgMatches) {
             for pkg in list {
                 println!("{} [{}]", pkg.name, pkg.version);
                 println!("    {}", pkg.description.unwrap_or_default());
+            }
+        }
+        Err(err) => {
+            yeet!("aurweb returned an error: {}", err);
+        }
+    }
+}
+
+fn info(args: &clap::ArgMatches) {
+    let query = args.value_of("NAME").expect("NAME is required");
+
+    debug!("info query: \"{}\"", query);
+
+    trace!("calling aurweb");
+
+    match raur::info(&[query]) {
+        Ok(list) => {
+            match list.first() {
+                Some(pkg) => {
+                    println!("{}", pkg.name);
+                    println!("    version: {}", pkg.version);
+                    println!("    AUR url: https://aur.archlinux.org/packages/{}/", pkg.name);
+                    println!("    git url: https://aur.archlinux.org/{}.git", pkg.package_base);
+                    println!("    upstream url: {}", pkg.url.as_deref().unwrap_or("<none>"));
+                    println!("    license: {}", pkg.license.join(", "));
+                    println!("    votes: {}", pkg.num_votes);
+                    println!("    maintainer: {}", pkg.maintainer.as_deref().unwrap_or("<orphaned>"));
+                    println!("    last update: {}",
+                        chrono::Utc.timestamp(pkg.last_modified, 0).with_timezone(&chrono::Local));
+                    if !pkg.groups.is_empty() {
+                        println!("    group: {}", pkg.groups.join(" "));
+                    }
+                    if !pkg.provides.is_empty() {
+                        println!("    provides: {}", pkg.provides.join(" "));
+                    }
+                    if !pkg.replaces.is_empty() {
+                        println!("    replaces: {}", pkg.replaces.join(" "));
+                    }
+                    if !pkg.conflicts.is_empty() {
+                        println!("    conflicts: {}", pkg.conflicts.join(" "));
+                    }
+                    println!("    dependencies: {}", pkg.depends.join(" "));
+                    if !pkg.opt_depends.is_empty() {
+                        println!("    optional: {}", pkg.opt_depends.join(" "));
+                    }
+                    if !pkg.make_depends.is_empty() {
+                        println!("    build deps: {}", pkg.make_depends.join(" "));
+                    }
+                    if !pkg.check_depends.is_empty() {
+                        println!("    check deps: {}", pkg.check_depends.join(" "));
+                    }
+                }
+                None => {
+                    error!("package {} was not found in the AUR", query);
+                }
             }
         }
         Err(err) => {
