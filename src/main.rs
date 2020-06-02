@@ -76,6 +76,8 @@ fn args() -> clap::App<'static, 'static> {
                 .help("name of AUR package to display")
                 .required(true)
                 .index(1)))
+        .subcommand(clap::SubCommand::with_name("generate-bash-completions")
+            .about("emits a bash-completion script to stdout"))
 }
 
 fn main() -> io::Result<()> {
@@ -104,6 +106,7 @@ fn main() -> io::Result<()> {
         ("checkupdates", _) => checkupdates()?,
         ("search", Some(sub_args)) => search(sub_args),
         ("info", Some(sub_args)) => info(sub_args),
+        ("generate-bash-completions", _) => bashcomp(),
         _ => (), // if no subcommand was given we wouldn't have gotten here
     }
 
@@ -244,4 +247,8 @@ fn info(args: &clap::ArgMatches) {
             yeet!("aurweb returned an error: {}", err);
         }
     }
+}
+
+fn bashcomp() {
+    args().gen_completions_to("qmaur", clap::Shell::Bash, &mut io::stdout());
 }
