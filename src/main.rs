@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::cmp::Eq;
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::io;
 use std::process::Command;
 
@@ -27,9 +30,13 @@ macro_rules! yeet {
     };
 }
 
-struct Package<'a> {
+struct LocalPackage<'a> {
     name: &'a str,
     version: &'a str,
+}
+
+fn make_map<T, K: Eq + Hash, F: FnMut(&T) -> K>(input: Vec<T>, mut key: F) -> HashMap<K, T> {
+    input.into_iter().map(|it| (key(&it), it)).collect::<HashMap<_, _>>()
 }
 
 fn main() -> io::Result<()> {
@@ -61,15 +68,27 @@ fn main() -> io::Result<()> {
     for l in stdout.lines() {
         let mut split = l.split_whitespace();
         match (split.next(), split.next()) {
-            (Some(name), Some(version)) => pkglist.push(Package { name, version, }),
+            (Some(name), Some(version)) => pkglist.push(LocalPackage { name, version, }),
             _ => {
                 eprintln!("--error: not enough names in a line? \"{}\"", l);
             }
         }
     }
+    let pkglist = make_map(pkglist, |p| p.name);
 
-    for pkg in pkglist {
-        println!("{} {}", pkg.name, pkg.version);
+    let names = pkglist.keys().collect::<Vec<_>>();
+    let info = match raur::info(&names) {
+        Ok(list) => list,
+        Err(err) => { yeet!("aurweb returned an error: \"{}\"", err); }
+    };
+    let mut info = make_map(info, |p| p.name.clone());
+
+    for (name, pkg) in pkglist {
+        if let Some(aurpkg) = info.remove(name) {
+            println!("{}\t\t{}\t\t{}", name, pkg.version, aurpkg.version);
+        } else {
+            println!("--package {} was not found in AUR", name);
+        }
     }
 
     Ok(())
