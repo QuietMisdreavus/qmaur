@@ -85,7 +85,9 @@ fn main() -> io::Result<()> {
 
     for (name, pkg) in pkglist {
         if let Some(aurpkg) = info.remove(name) {
-            println!("{}\t\t{}\t\t{}", name, pkg.version, aurpkg.version);
+            if pkg.version != aurpkg.version {
+                println!("{} {} -> {}", name, pkg.version, aurpkg.version);
+            }
         } else {
             println!("--package {} was not found in AUR", name);
         }
