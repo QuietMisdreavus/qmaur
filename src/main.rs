@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::cmp::Eq;
+use std::cmp::{Eq, Ordering};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::io;
@@ -163,7 +163,7 @@ fn checkupdates() -> io::Result<()> {
     for (name, pkg) in pkglist {
         if let Some(aurpkg) = info.remove(name) {
             debug!("{} / local {} / remote {}", name, pkg.version, aurpkg.version);
-            if pkg.version != aurpkg.version {
+            if pkg.version != aurpkg.version && check_versions(pkg.version, &aurpkg.version)? == Ordering::Less {
                 println!("{} {} -> {}", name, pkg.version, aurpkg.version);
             }
         } else {
@@ -172,6 +172,35 @@ fn checkupdates() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn check_versions(left: &str, right: &str) -> io::Result<Ordering> {
+    let mut cmd = Command::new("vercmp");
+    cmd.arg(left);
+    cmd.arg(right);
+
+    debug!("executing {:?}", cmd);
+
+    let out = cmd.output()?;
+    let comp_str = if let Ok(s) = String::from_utf8(out.stdout) {
+        debug!("vercmp output: {}", s);
+        s
+    } else {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "vercmp didn't return utf8 text"));
+    };
+    let cmp_num = if let Ok(n) = comp_str.trim().parse::<i32>() {
+        n
+    } else {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "vercmp didn't output a number"));
+    };
+
+    if cmp_num < 0 {
+        Ok(Ordering::Less)
+    } else if cmp_num > 0 {
+        Ok(Ordering::Greater)
+    } else {
+        Ok(Ordering::Equal)
+    }
 }
 
 fn search(args: &clap::ArgMatches) {
